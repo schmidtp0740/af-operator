@@ -1,0 +1,22 @@
+name: Docker Image CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build the Docker image
+      env: # Or as an environment variable
+        docker_tenancy: ${{ secrets.DockerTenancy }}
+        docker_secret: ${{ secrets.DockerSecret }}
+        docker_username: ${{ secrets.DockerUsername }}
+      run: docker login phx.ocir.io -u ${docker_tenancy}/${docker_username} -p ${docker_secret} && make docker-build docker-push IMG=phx.ocir.io/${docker_tenancy}/af-operator:$GITHUB_SHA
