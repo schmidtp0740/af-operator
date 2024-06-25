@@ -20,4 +20,13 @@ resources:
   kind: Relay
   path: github.com/schmidtp0740/af-operator/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: apexfusion.com
+  group: node
+  kind: Core
+  path: github.com/schmidtp0740/af-operator/api/v1alpha1
+  version: v1alpha1
 version: "3"

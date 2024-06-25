@@ -129,6 +129,17 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "Relay")
 		os.Exit(1)
 	}
+
+	coreReconciler := &controller.CoreReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}
+	if err = coreReconciler.SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Core")
+		os.Exit(1)
+	}
+
+	go coreReconciler.ActiveStandbyWatch()
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
