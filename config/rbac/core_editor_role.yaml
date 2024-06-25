@@ -1,0 +1,31 @@
+# permissions for end users to edit cores.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: core-editor-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: af-operator
+    app.kubernetes.io/part-of: af-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: core-editor-role
+rules:
+- apiGroups:
+  - node.apexfusion.com
+  resources:
+  - cores
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - node.apexfusion.com
+  resources:
+  - cores/status
+  verbs:
+  - get

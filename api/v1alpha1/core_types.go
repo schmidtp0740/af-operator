@@ -23,17 +23,17 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// RelaySpec defines the desired state of Relay
-type RelaySpec struct {
+// CoreSpec defines the desired state of Core
+type CoreSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// +kubebuilder:validation:Required
+	// Foo is an example field of Core. Edit core_types.go to remove/update
 	NodeSpec `json:",inline"`
 }
 
-// RelayStatus defines the observed state of Relay
-type RelayStatus struct {
+// CoreStatus defines the observed state of Core
+type CoreStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	Nodes []string `json:"nodes"`
@@ -42,24 +42,24 @@ type RelayStatus struct {
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
-// Relay is the Schema for the relays API
-type Relay struct {
+// Core is the Schema for the cores API
+type Core struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   RelaySpec   `json:"spec,omitempty"`
-	Status RelayStatus `json:"status,omitempty"`
+	Spec   CoreSpec   `json:"spec,omitempty"`
+	Status CoreStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 
-// RelayList contains a list of Relay
-type RelayList struct {
+// CoreList contains a list of Core
+type CoreList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Relay `json:"items"`
+	Items           []Core `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&Relay{}, &RelayList{})
+	SchemeBuilder.Register(&Core{}, &CoreList{})
 }

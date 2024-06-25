@@ -1,0 +1,174 @@
+apiVersion: node.apexfusion.com/v1alpha1
+kind: Core
+metadata:
+  labels:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/instance: core-sample
+    app.kubernetes.io/part-of: af-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: af-operator
+  name: core-sample
+spec:
+  replicas: 1
+  image: "ghcr.io/intersectmbo/cardano-node:8.7.3"
+  imagePullSecrets: 
+    - name: ocirsecret
+  resources:
+    requests:
+      cpu: 2
+      memory: 14Gi
+    limits:
+      cpu: 2
+      memory: 14Gi
+  storage:
+    accessModes:
+      - "ReadWriteOnce"
+    storageClassName: "hostpath"
+    resources:
+      requests:
+        storage: 5Gi
+  service:
+    type: ClusterIP
+    port: 31400
+  configuration: 
+    name: 'core-config' 
+  topology: 
+    name: 'core-topology'
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name:  'core-topology'
+data:
+  topology.json: |
+    {
+      "localRoots": [],
+      "publicRoots" : [
+        { 
+          "accessPoints": [
+            { "address": "relay-0.prime.testnet.apexfusion.org", "port": 5521 },
+            { "address": "relay-1.prime.testnet.apexfusion.org", "port": 5521 }
+          ],
+          "advertise": true,
+          "valency": 1
+        }
+      ],
+      "useLedgerAfterSlot": 0
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name:  'core-config'
+data:
+  configuration.yaml: |
+    ByronGenesisFile: /configuration/byron_genesis.json
+    ShelleyGenesisFile: /configuration/shelley_genesis.json
+    AlonzoGenesisFile: /configuration/alonzo_genesis.json
+    ConwayGenesisFile: /configuration/conway_genesis.json
+    SocketPath: db/node.socket
+    PBftSignatureThreshold: 0.6
+    MaxConcurrencyBulkSync: 1
+    MaxConcurrencyDeadline: 2
+    Protocol: Cardano
+    PBftSignatureThreshold: 0.6
+    RequiresNetworkMagic: RequiresMagic
+    LastKnownBlockVersion-Major: 6
+    LastKnownBlockVersion-Minor: 0
+    LastKnownBlockVersion-Alt: 0
+    TurnOnLogging: True
+    TurnOnLogMetrics: True
+    minSeverity: Debug
+    TracingVerbosity: NormalVerbosity
+    setupBackends:
+      - KatipBK
+    defaultBackends:
+      - KatipBK
+    hasEKG: 12788
+    hasPrometheus:
+      - "0.0.0.0"
+      - 12789
+    setupScribes:
+      - scKind: StdoutSK
+        scName: stdout
+        scFormat: ScText
+    defaultScribes:
+      - - StdoutSK
+        - stdout
+    rotation:
+      rpLogLimitBytes: 5000000
+      rpKeepFilesNum:  3
+      rpMaxAgeHours:   24
+    TraceBlockFetchClient: False
+    TraceBlockFetchDecisions: False
+    TraceBlockFetchProtocol: False
+    PBftSignatureThreshold: 0.6
+    TraceBlockFetchProtocolSerialised: False
+    PBftSignatureThreshold: 0.6
+    TraceBlockFetchServer: False
+    TraceBlockchainTime: False
+    TraceChainDb: True
+    TraceChainSyncClient: False
+    TraceChainSyncBlockServer: False
+    TraceChainSyncHeaderServer: False
+    TraceChainSyncProtocol: False
+    PBftSignatureThreshold: 0.6
+    TraceDNSResolver: True
+    TraceDNSSubscription: True
+    TraceErrorPolicy: True
+    TraceLocalErrorPolicy: True
+    TraceForge: True
+    TraceHandshake: False
+    TraceIpSubscription: True
+    TraceLocalRootPeers: True
+    TracePublicRootPeers: True
+    TracePeerSelection: True
+    TraceDebugPeerSelection: False
+    TracePeerSelectionActions: True
+    TraceConnectionManager: True
+    TraceServer: True
+    TraceLocalConnectionManager: False
+    TraceLocalServer: False
+    TraceLocalChainSyncProtocol: False
+    PBftSignatureThreshold: 0.6
+    TraceLocalHandshake: False
+    TraceLocalTxSubmissionProtocol: False
+    PBftSignatureThreshold: 0.6
+    TraceLocalTxSubmissionServer: False
+    TraceMempool: True
+    TraceMux: False
+    TraceTxInbound: False
+    TraceTxOutbound: False
+    TraceTxSubmissionProtocol: False
+    PBftSignatureThreshold: 0.6
+    options:
+      mapBackends:
+        cardano.node.metrics:
+          - EKGViewBK
+      mapScribes:
+        cardano.node.metrics:
+          - "FileSK::logs/mainnet.log"
+      mapSeverity:
+        cardano.node.ChainDB: Notice
+        cardano.node.DnsSubscription: Debug
+    TestShelleyHardForkAtEpoch: 0
+    TestAllegraHardForkAtEpoch: 0
+    TestMaryHardForkAtEpoch: 0
+    TestAlonzoHardForkAtEpoch: 0
+    TestBabbageHardForkAtEpoch: 0
+    ExperimentalProtocolsEnabled: True
+    ByronGenesisHash: acd3e7c4cc071ae176fa253e654f0dd4e759892b16e958d8bd3c393f5c6c66d2
+    ShelleyGenesisHash: 0b67b0cb16e973478888efb1c7f69fca8e80489369afed94624a588e94a94f2b
+    AlonzoGenesisHash: 0f715ff78fcab739c6cb2cc1073eb87d0ffe3514218bfa0337d416f6fbaf7886
+    ConwayGenesisHash: 42d43350244fb70d5f07a13778c549c916d006f8dfc1f540f605bb3084443147
+    EnableP2P: True
+    TargetNumberOfRootPeers: 20
+    TargetNumberOfKnownPeers: 20
+    TargetNumberOfEstablishedPeers: 10
+    TargetNumberOfActivePeers: 10
+    TraceInboundGovernorCounters: True
+    TraceConnectionManagerTransitions: True
+    TraceLedgerPeers: True
+    TracePeerSelectionCounters: True
+    TracePeerStateActions: True
+
