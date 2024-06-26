@@ -1,4 +1,4 @@
-name: Docker Image CI
+name: CI
 
 on:
   push:
@@ -8,10 +8,35 @@ on:
 
 jobs:
 
-  build:
-
+  format:
     runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Format
+      run: |
+        set -e
+        make fmt
 
+  vet:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Vet
+      run: |
+        set -e
+        make vet
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Test
+      run: |
+        set -e
+        make test
+
+  build-push:
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
     - name: Build the Docker image
@@ -34,3 +59,5 @@ jobs:
         # tag the image as latest
         docker tag phx.ocir.io/${docker_tenancy}/cardano-operator:$GITHUB_SHA phx.ocir.io/${docker_tenancy}/cardano-operator:latest
         make docker-push IMG=phx.ocir.io/${docker_tenancy}/cardano-operator:latest
+
+
