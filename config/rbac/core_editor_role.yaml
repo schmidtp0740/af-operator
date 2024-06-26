@@ -12,7 +12,7 @@ metadata:
   name: core-editor-role
 rules:
 - apiGroups:
-  - node.apexfusion.com
+  - node.cardano.io
   resources:
   - cores
   verbs:
@@ -24,7 +24,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - node.apexfusion.com
+  - node.cardano.io
   resources:
   - cores/status
   verbs:
