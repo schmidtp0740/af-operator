@@ -32,6 +32,7 @@ func generateNodeStatefulset(name string,
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Labels:    labels,
 		},
 	}
 
@@ -222,6 +223,7 @@ func generateNodeService(name string,
 		Name:        name,
 		Namespace:   namespace,
 		Annotations: service.Annotations,
+		Labels:      labels,
 	}
 
 	svc.Spec.Selector = labels
