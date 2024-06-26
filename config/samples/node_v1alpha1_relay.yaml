@@ -1,4 +1,4 @@
-apiVersion: node.apexfusion.com/v1alpha1
+apiVersion: node.cardano.io/v1alpha1
 kind: Relay
 metadata:
   labels:

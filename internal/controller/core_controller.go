@@ -39,9 +39,9 @@ type CoreReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-//+kubebuilder:rbac:groups=node.apexfusion.com,resources=cores,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=node.apexfusion.com,resources=cores/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=node.apexfusion.com,resources=cores/finalizers,verbs=update
+//+kubebuilder:rbac:groups=node.cardano.io,resources=cores,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=node.cardano.io,resources=cores/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=node.cardano.io,resources=cores/finalizers,verbs=update
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;update;patch
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;create;update;patch;delete

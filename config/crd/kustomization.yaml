@@ -2,8 +2,8 @@
 # since it depends on service name and namespace that are out of this kustomize package.
 # It should be run by config/default
 resources:
-- bases/node.apexfusion.com_relays.yaml
-- bases/node.apexfusion.com_cores.yaml
+- bases/node.cardano.io_relays.yaml
+- bases/node.cardano.io_cores.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
 patches:
