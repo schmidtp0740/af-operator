@@ -27,7 +27,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	nodev1alpha1 "github.com/schmidtp0740/af-operator/api/v1alpha1"
+	nodev1alpha1 "github.com/schmidtp0740/cardano-operator/api/v1alpha1"
 )
 
 var _ = Describe("Relay Controller", func() {

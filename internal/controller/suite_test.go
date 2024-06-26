@@ -32,7 +32,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	nodev1alpha1 "github.com/schmidtp0740/af-operator/api/v1alpha1"
+	nodev1alpha1 "github.com/schmidtp0740/cardano-operator/api/v1alpha1"
 	//+kubebuilder:scaffold:imports
 )
 

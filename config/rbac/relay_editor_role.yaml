@@ -6,8 +6,8 @@ metadata:
     app.kubernetes.io/name: clusterrole
     app.kubernetes.io/instance: relay-editor-role
     app.kubernetes.io/component: rbac
-    app.kubernetes.io/created-by: af-operator
-    app.kubernetes.io/part-of: af-operator
+    app.kubernetes.io/created-by: cardano-operator
+    app.kubernetes.io/part-of: cardano-operator
     app.kubernetes.io/managed-by: kustomize
   name: relay-editor-role
 rules:
