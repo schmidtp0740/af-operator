@@ -1,0 +1,29 @@
+name: Test CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Format
+      run: |
+        set -e
+        make fmt
+    - name: Vet
+      run: |
+        set -e
+        make vet
+    - name: Test
+      run: |
+        set -e
+        make test
+
