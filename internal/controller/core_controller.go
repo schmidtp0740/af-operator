@@ -30,7 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	nodev1alpha1 "github.com/schmidtp0740/af-operator/api/v1alpha1"
+	nodev1alpha1 "github.com/schmidtp0740/cardano-operator/api/v1alpha1"
 )
 
 // CoreReconciler reconciles a Core object

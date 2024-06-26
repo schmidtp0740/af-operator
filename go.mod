@@ -1,4 +1,4 @@
-module github.com/schmidtp0740/af-operator
+module github.com/schmidtp0740/cardano-operator
 
 go 1.20
 

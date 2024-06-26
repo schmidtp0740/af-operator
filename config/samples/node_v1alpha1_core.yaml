@@ -4,9 +4,9 @@ metadata:
   labels:
     app.kubernetes.io/name: core
     app.kubernetes.io/instance: core-sample
-    app.kubernetes.io/part-of: af-operator
+    app.kubernetes.io/part-of: cardano-operator
     app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: af-operator
+    app.kubernetes.io/created-by: cardano-operator
   name: core-sample
 spec:
   replicas: 1
