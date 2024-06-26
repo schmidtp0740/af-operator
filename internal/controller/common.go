@@ -163,10 +163,6 @@ func generateNodeStatefulset(name string,
 
 	state.Spec.Template.Spec.Containers = append(state.Spec.Template.Spec.Containers, cardanoNode)
 
-	// the inputoutput images need to have their genesis files moved to a generalized filepath
-	// create InitContainers to move genesis files to /genesis
-	addOrRemoveInputOutputContainer(nodeSpec.Image, state)
-
 	if coreNode {
 		defaultMode := int32(0400)
 		state.Spec.Template.Spec.Volumes = append(state.Spec.Template.Spec.Volumes, corev1.Volume{

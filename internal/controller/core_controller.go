@@ -143,6 +143,7 @@ func (r *CoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, err
 	}
 
+	logger.Info("Ensuring StatefulSet")
 	result, err := ensureSpec(core.Spec.Replicas, found, core.Spec.NodeSpec, r.Client)
 	if err != nil || result.Requeue {
 		if err != nil {
@@ -166,7 +167,7 @@ func (r *CoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return result, err
 	}
 
-	return ctrl.Result{}, nil
+	return result, nil
 }
 
 // serviceForCore returns a Relay Service object
