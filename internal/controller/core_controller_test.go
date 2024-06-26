@@ -313,7 +313,7 @@ var _ = Describe("Core Controller", func() {
 			Expect(service.Spec.ClusterIP).NotTo(BeEmpty())
 
 			// Verify the service ports
-			Expect(len(service.Spec.Ports)).To(Equal(1))
+			Expect(len(service.Spec.Ports)).To(Equal(2))
 			Expect(service.Spec.Ports[0].Port).To(Equal(int32(31400)))
 			Expect(service.Spec.Ports[0].TargetPort.IntVal).To(Equal(int32(31400)))
 
