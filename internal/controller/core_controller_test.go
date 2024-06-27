@@ -231,10 +231,11 @@ var _ = Describe("Core Controller", func() {
 			Expect(statefulSet.Spec.Template.Annotations).To(HaveKeyWithValue("prometheus.io/path", "/metrics"))
 
 			// Verify the Template Volumes
-			Expect(statefulSet.Spec.Template.Spec.Volumes).To(HaveLen(3))
+			Expect(statefulSet.Spec.Template.Spec.Volumes).To(HaveLen(4))
 			Expect(statefulSet.Spec.Template.Spec.Volumes[0].Name).To(Equal("node-ipc"))
 			Expect(statefulSet.Spec.Template.Spec.Volumes[1].Name).To(Equal("cardano-config"))
-			Expect(statefulSet.Spec.Template.Spec.Volumes[2].Name).To(Equal("nodeop-secrets"))
+			Expect(statefulSet.Spec.Template.Spec.Volumes[2].Name).To(Equal("secrets"))
+			Expect(statefulSet.Spec.Template.Spec.Volumes[3].Name).To(Equal("nodeop-secrets"))
 
 			// Verify the Container
 			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1))

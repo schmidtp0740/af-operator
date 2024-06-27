@@ -170,9 +170,45 @@ func generateNodeStatefulset(name string,
 
 	state.Spec.Template.Spec.Containers = append(state.Spec.Template.Spec.Containers, cardanoNode)
 
+	// add initContainers
+	// if coreNode is true, add initContainers for copy all files from secrets volume to nodeop-secrets volume
+	// then modify the permissions of the files
+	// to 400
 	if coreNode {
-		nodeOpSecretVolume.Name = "nodeop-secrets"
+		state.Spec.Template.Spec.InitContainers = []corev1.Container{
+			{
+				Name:  "copy-secrets",
+				Image: "alpine:3.12",
+				Command: []string{
+					"sh",
+					"-c",
+					"cp /secrets/* /nodeop/ && chmod 400 /nodeop/*",
+				},
+				VolumeMounts: []corev1.VolumeMount{
+					{
+						Name:      "secrets",
+						MountPath: "/secrets",
+					},
+					{
+						Name:      "nodeop-secrets",
+						MountPath: "/nodeop",
+					},
+				},
+			},
+		}
+	}
+
+	if coreNode {
+		nodeOpSecretVolume.Name = "secrets"
 		state.Spec.Template.Spec.Volumes = append(state.Spec.Template.Spec.Volumes, *nodeOpSecretVolume)
+
+		// add a volume with name nodeop-secrets that is an emptyDir
+		state.Spec.Template.Spec.Volumes = append(state.Spec.Template.Spec.Volumes, corev1.Volume{
+			Name: "nodeop-secrets",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		})
 	}
 
 	// add volumeClaimTemplate
