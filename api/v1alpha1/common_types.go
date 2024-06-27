@@ -23,3 +23,11 @@ type NodeServiceSpec struct {
 	Type        v1.ServiceType    `json:"type,omitempty"`
 	Port        int32             `json:"port,omitempty"`
 }
+
+// NodeStatus defines the observed state of Core
+type NodeStatus struct {
+	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
+	// Important: Run "make" to regenerate code after modifying this file
+	Nodes  []string `json:"nodes"`
+	Events []string `json:"events"`
+}

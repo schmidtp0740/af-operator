@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -26,7 +27,12 @@ func generateNodeStatefulset(name string,
 	namespace string,
 	labels map[string]string,
 	nodeSpec nodev1alpha1.NodeSpec,
-	coreNode bool) *appsv1.StatefulSet {
+	nodeOpSecretVolume *corev1.Volume) *appsv1.StatefulSet {
+
+	coreNode := false
+	if nodeOpSecretVolume != nil {
+		coreNode = true
+	}
 
 	state := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -165,38 +171,8 @@ func generateNodeStatefulset(name string,
 	state.Spec.Template.Spec.Containers = append(state.Spec.Template.Spec.Containers, cardanoNode)
 
 	if coreNode {
-		defaultMode := int32(0400)
-		state.Spec.Template.Spec.Volumes = append(state.Spec.Template.Spec.Volumes, corev1.Volume{
-			Name: "nodeop-secrets",
-			VolumeSource: corev1.VolumeSource{
-				Projected: &corev1.ProjectedVolumeSource{
-					DefaultMode: &defaultMode,
-					Sources: []corev1.VolumeProjection{
-						{
-							Secret: &corev1.SecretProjection{
-								LocalObjectReference: corev1.LocalObjectReference{
-									Name: "hot.skey",
-								},
-							},
-						},
-						{
-							Secret: &corev1.SecretProjection{
-								LocalObjectReference: corev1.LocalObjectReference{
-									Name: "vrf.skey",
-								},
-							},
-						},
-						{
-							Secret: &corev1.SecretProjection{
-								LocalObjectReference: corev1.LocalObjectReference{
-									Name: "op.cert",
-								},
-							},
-						},
-					},
-				},
-			},
-		})
+		nodeOpSecretVolume.Name = "nodeop-secrets"
+		state.Spec.Template.Spec.Volumes = append(state.Spec.Template.Spec.Volumes, *nodeOpSecretVolume)
 	}
 
 	// add volumeClaimTemplate
@@ -246,7 +222,7 @@ func generateNodeService(name string,
 	return svc
 }
 
-func ensureSpec(replicas int32, found *appsv1.StatefulSet, nodeSpec nodev1alpha1.NodeSpec, r client.Client) (ctrl.Result, error) {
+func ensureSpec(replicas int32, found *appsv1.StatefulSet, nodeSpec nodev1alpha1.NodeSpec, r client.Client) (ctrl.Result, []string, error) {
 
 	ctx := context.Background()
 
@@ -255,10 +231,10 @@ func ensureSpec(replicas int32, found *appsv1.StatefulSet, nodeSpec nodev1alpha1
 		*found.Spec.Replicas = replicas
 		err := r.Update(ctx, found)
 		if err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{}, nil, err
 		}
 		// Spec updated - return and requeue
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{Requeue: true}, []string{"Replica updated"}, nil
 	}
 
 	// Ensure the statefulset image is the same as the spec
@@ -268,14 +244,12 @@ func ensureSpec(replicas int32, found *appsv1.StatefulSet, nodeSpec nodev1alpha1
 			// then it should update the inputoutput special configurations like Initcontainers and volumes
 			found.Spec.Template.Spec.Containers[key].Image = nodeSpec.Image
 			found.Spec.Template.Spec.ImagePullSecrets = nodeSpec.ImagePullSecrets
-			addOrRemoveInputOutputContainer(nodeSpec.Image, found)
 			err := r.Update(ctx, found)
 			if err != nil {
-
-				return ctrl.Result{}, err
+				return ctrl.Result{}, nil, err
 			}
 			// Spec updated - return and requeue
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{Requeue: true}, []string{"Image updated"}, nil
 		}
 	}
 
@@ -285,31 +259,17 @@ func ensureSpec(replicas int32, found *appsv1.StatefulSet, nodeSpec nodev1alpha1
 			found.Spec.Template.Spec.Containers[key].Resources = nodeSpec.Resources
 			err := r.Update(ctx, found)
 			if err != nil {
-				return ctrl.Result{}, err
+				return ctrl.Result{}, nil, err
 			}
 			// Spec updated - return and requeue
-			return ctrl.Result{Requeue: true}, nil
+			return ctrl.Result{Requeue: true}, []string{"Resources updated"}, nil
 		}
 	}
 
-	return ctrl.Result{}, nil
+	return ctrl.Result{}, nil, nil
 }
 
-// getPodNames returns the pod names of the array of pods passed in
-func getPodNames(pods []corev1.Pod) []string {
-
-	if len(pods) == 0 {
-		return nil
-	}
-
-	podNames := []string{}
-	for _, pod := range pods {
-		podNames = append(podNames, pod.Name)
-	}
-	return podNames
-}
-
-func updateStatus(namespace string, labels map[string]string, nodes []string, r client.Client, fn func([]string) (ctrl.Result, error)) (ctrl.Result, error) {
+func getPodNames(namespace string, labels map[string]string, r client.Client) ([]string, error) {
 
 	ctx := context.Background()
 
@@ -321,17 +281,21 @@ func updateStatus(namespace string, labels map[string]string, nodes []string, r 
 		client.MatchingLabels(labels),
 	}
 	if err := r.List(ctx, podList, listOpts...); err != nil {
-		return ctrl.Result{}, err
-	}
-	podNames := getPodNames(podList.Items)
-
-	// Update status.Nodes if needed
-	if !reflect.DeepEqual(podNames, nodes) {
-
-		return fn(podNames)
+		return nil, err
 	}
 
-	return ctrl.Result{}, nil
+	pods := podList.Items
+
+	if len(pods) == 0 {
+		return nil, nil
+	}
+
+	podNames := []string{}
+	for _, pod := range pods {
+		podNames = append(podNames, pod.Name)
+	}
+
+	return podNames, nil
 }
 
 func ensureActiveStandby(name string, namespace string, labels map[string]string, r client.Client) (ctrl.Result, error) {
@@ -341,7 +305,7 @@ func ensureActiveStandby(name string, namespace string, labels map[string]string
 	svc := &corev1.Service{}
 	err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, svc)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("Failed to get service: %s", err.Error())
+		return ctrl.Result{}, fmt.Errorf("failed to get service: %s", err.Error())
 	}
 
 	// get eligible pods
@@ -408,107 +372,27 @@ func ensureActiveStandby(name string, namespace string, labels map[string]string
 	return ctrl.Result{}, nil
 }
 
-func addOrRemoveInputOutputContainer(image string, state *appsv1.StatefulSet) {
-	if strings.HasPrefix(image, "inputoutput/cardano") {
+// updateStatus updates the status of the Core resource
+func updateStatus(events []string, status *nodev1alpha1.NodeStatus, namespace string, name string, client client.Client, ctx context.Context) error {
 
-		// add genesis volume mount if the cardano-node container does not already
-		contains := false
-		for key, container := range state.Spec.Template.Spec.Containers {
+	var err error
 
-			// find cardano-node container
-			if strings.EqualFold(container.Name, "cardano-node") {
+	logger := log.FromContext(ctx).WithValues("core", namespace+"/"+name)
 
-				// find genesis volumeMount
-				for _, volumeMounts := range container.VolumeMounts {
-					if strings.EqualFold(volumeMounts.Name, "genesis") {
-						contains = true
-						break
-					}
-				}
-
-				// add to it if it does not exist
-				if !contains {
-					state.Spec.Template.Spec.Containers[key].VolumeMounts = append(state.Spec.Template.Spec.Containers[key].VolumeMounts, corev1.VolumeMount{Name: "genesis", MountPath: "/genesis"})
-				}
-				break
-			}
-		}
-
-		// add initContainer if it does not already
-		contains = false
-		initContainer := corev1.Container{
-			Name:  "cardano-node-init",
-			Image: image,
-			VolumeMounts: []corev1.VolumeMount{
-				{
-					Name:      "genesis",
-					MountPath: "/genesis",
-				},
-			},
-			Command: []string{"sh", "-c", "cp /nix/store/*-mainnet-byron-genesis.json /genesis/byron-genesis.json && cp /nix/store/*-mainnet-shelley-genesis.json /genesis/shelley-genesis.json"},
-		}
-		for key, container := range state.Spec.Template.Spec.InitContainers {
-			if strings.EqualFold(container.Name, "cardano-node-init") {
-				contains = true
-
-				// verify that image matches image of container
-				state.Spec.Template.Spec.InitContainers[key].Image = image
-				break
-			}
-		}
-
-		if !contains {
-			state.Spec.Template.Spec.InitContainers = append(state.Spec.Template.Spec.InitContainers, initContainer)
-		}
-
-		// Add genesis volume if it does not already
-		contains = false
-		for _, volume := range state.Spec.Template.Spec.Volumes {
-			if strings.EqualFold(volume.Name, "genesis") {
-				contains = true
-				break
-			}
-		}
-
-		if !contains {
-			state.Spec.Template.Spec.Volumes = append(state.Spec.Template.Spec.Volumes, corev1.Volume{Name: "genesis", VolumeSource: corev1.VolumeSource{EmptyDir: nil}})
-		}
-		return
+	// get podNames for Status.Nodes
+	status.Nodes, err = getPodNames(namespace, labelsForCore(name), client)
+	if err != nil {
+		logger.Error(err, "Failed to get pod names")
+		return err
 	}
 
-	// else remove the inputoutput configurations if any
+	// Update status.Events
+	status.Events = append(status.Events, events...)
 
-	// remove container's genesis volume
-	for key, container := range state.Spec.Template.Spec.Containers {
-
-		// find cardano-node container
-		if strings.EqualFold(container.Name, "cardano-node") {
-
-			// find genesis volumeMount
-			for volumeMountKey, volumeMounts := range container.VolumeMounts {
-				if strings.EqualFold(volumeMounts.Name, "genesis") {
-					state.Spec.Template.Spec.Containers[key].VolumeMounts = append(state.Spec.Template.Spec.Containers[key].VolumeMounts[:volumeMountKey], state.Spec.Template.Spec.Containers[key].VolumeMounts[volumeMountKey+1:]...)
-					break
-				}
-			}
-			break
-		}
+	// if events is greater than 10, remove the oldest event
+	if len(status.Events) > 10 {
+		status.Events = status.Events[1:]
 	}
 
-	// remove inputoutput init container
-	for key, container := range state.Spec.Template.Spec.InitContainers {
-		if strings.EqualFold(container.Name, "cardano-node-init") {
-			state.Spec.Template.Spec.InitContainers = append(state.Spec.Template.Spec.InitContainers[:key], state.Spec.Template.Spec.InitContainers[key+1:]...)
-			break
-		}
-	}
-
-	// remove inputoutput genesis volume
-	for key, volume := range state.Spec.Template.Spec.Volumes {
-		if strings.EqualFold(volume.Name, "genesis") {
-			state.Spec.Template.Spec.Volumes = append(state.Spec.Template.Spec.Volumes[:key], state.Spec.Template.Spec.Volumes[key+1:]...)
-			break
-		}
-	}
-
+	return nil
 }

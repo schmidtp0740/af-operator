@@ -55,6 +55,8 @@ type RelayReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.3/pkg/reconcile
 func (r *RelayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	events := []string{}
+
 	logger := log.FromContext(ctx).WithValues("relay", req.NamespacedName)
 
 	// Fetch the Relay instance
@@ -72,6 +74,22 @@ func (r *RelayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		logger.Error(err, "Failed to get Relay")
 		return ctrl.Result{}, err
 	}
+
+	// defer update status
+	defer func() {
+		err := updateStatus(events, &relay.Status, relay.Namespace, relay.Name, r.Client, ctx)
+		if err != nil {
+			if err != nil {
+				logger.Error(err, "Failed to update status", "Relay.Namespace", relay.Namespace, "Relay.Name", relay.Name)
+			}
+		}
+
+		// update status
+		err = r.Client.Status().Update(ctx, relay)
+		if err != nil {
+			logger.Error(err, "Failed to update Core status")
+		}
+	}()
 
 	// Check if the statefulset already exists, if not create a new one
 	found := &appsv1.StatefulSet{}
@@ -119,25 +137,14 @@ func (r *RelayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
-	result, err := ensureSpec(relay.Spec.Replicas, found, relay.Spec.NodeSpec, r.Client)
+	result, ev, err := ensureSpec(relay.Spec.Replicas, found, relay.Spec.NodeSpec, r.Client)
 	if err != nil || result.Requeue {
+		if ev != nil {
+			events = append(events, ev...)
+		}
+
 		if err != nil {
 			logger.Error(err, "Failed to update StatefulSet", "StatefulSet.Namespace", found.Namespace, "StatefulSet.Name", found.Name)
-		}
-		return result, err
-	}
-
-	result, err = updateStatus(relay.Namespace, labelsForRelay(relay.Name), relay.Status.Nodes, r.Client, func(pods []string) (ctrl.Result, error) {
-		relay.Status.Nodes = pods
-		err := r.Status().Update(ctx, relay)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
-	})
-	if err != nil || result.Requeue {
-		if err != nil {
-			logger.Error(err, "Failed to update status", "Relay.Namespace", found.Namespace, "Relay.Name", found.Name)
 		}
 		return result, err
 	}
@@ -163,7 +170,7 @@ func (r *RelayReconciler) statefulsetForRelay(relay *nodev1alpha1.Relay) (*appsv
 		relay.Namespace,
 		ls,
 		relay.Spec.NodeSpec,
-		false,
+		nil,
 	)
 
 	// Set Relay instance as the owner and controller

@@ -114,6 +114,14 @@ var _ = Describe("Core Controller", func() {
 							},
 						},
 					},
+					NodeOpSecretVolume: &v1.Volume{
+						Name: "nodeop-secrets",
+						VolumeSource: v1.VolumeSource{
+							Secret: &v1.SecretVolumeSource{
+								SecretName: "nodeop-secrets",
+							},
+						},
+					},
 				},
 			}
 
