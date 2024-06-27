@@ -284,14 +284,19 @@ func ensureSpec(replicas int32, found *appsv1.StatefulSet, nodeSpec nodev1alpha1
 
 // getPodNames returns the pod names of the array of pods passed in
 func getPodNames(pods []corev1.Pod) []string {
-	var podNames []string
+
+	if len(pods) == 0 {
+		return nil
+	}
+
+	podNames := []string{}
 	for _, pod := range pods {
 		podNames = append(podNames, pod.Name)
 	}
 	return podNames
 }
 
-func updateStatus(name string, namespace string, labels map[string]string, nodes []string, r client.Client, fn func([]string) (ctrl.Result, error)) (ctrl.Result, error) {
+func updateStatus(namespace string, labels map[string]string, nodes []string, r client.Client, fn func([]string) (ctrl.Result, error)) (ctrl.Result, error) {
 
 	ctx := context.Background()
 
@@ -492,5 +497,5 @@ func addOrRemoveInputOutputContainer(image string, state *appsv1.StatefulSet) {
 			break
 		}
 	}
-	return
+
 }

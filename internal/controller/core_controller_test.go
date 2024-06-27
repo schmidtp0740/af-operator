@@ -93,7 +93,7 @@ var _ = Describe("Core Controller", func() {
 							AccessModes:      []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
 							StorageClassName: &hostPath,
 							Resources: v1.ResourceRequirements{
-								Requests: v1.ResourceList{v1.ResourceName(v1.ResourceStorage): resource.MustParse("1Gi")},
+								Requests: v1.ResourceList{v1.ResourceStorage: resource.MustParse("1Gi")},
 							},
 						},
 						Service: nodev1alpha1.NodeServiceSpec{
