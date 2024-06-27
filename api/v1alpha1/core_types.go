@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -29,14 +30,8 @@ type CoreSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Foo is an example field of Core. Edit core_types.go to remove/update
-	NodeSpec `json:",inline"`
-}
-
-// CoreStatus defines the observed state of Core
-type CoreStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	Nodes []string `json:"nodes"`
+	NodeSpec           `json:",inline"`
+	NodeOpSecretVolume *v1.Volume `json:"nodeOpSecretVolume"`
 }
 
 //+kubebuilder:object:root=true
@@ -48,7 +43,7 @@ type Core struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
 	Spec   CoreSpec   `json:"spec,omitempty"`
-	Status CoreStatus `json:"status,omitempty"`
+	Status NodeStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true

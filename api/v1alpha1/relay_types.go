@@ -32,13 +32,6 @@ type RelaySpec struct {
 	NodeSpec `json:",inline"`
 }
 
-// RelayStatus defines the observed state of Relay
-type RelayStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-	Nodes []string `json:"nodes"`
-}
-
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
@@ -47,8 +40,8 @@ type Relay struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   RelaySpec   `json:"spec,omitempty"`
-	Status RelayStatus `json:"status,omitempty"`
+	Spec   RelaySpec  `json:"spec,omitempty"`
+	Status NodeStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true

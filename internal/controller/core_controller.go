@@ -58,6 +58,8 @@ type CoreReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.16.3/pkg/reconcile
 func (r *CoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	events := []string{}
+
 	logger := log.FromContext(ctx).WithValues("core", req.NamespacedName)
 
 	core := &nodev1alpha1.Core{}
@@ -75,10 +77,27 @@ func (r *CoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, err
 	}
 
+	// defer update status
+	defer func() {
+		err := updateStatus(events, &core.Status, core.Namespace, core.Name, r.Client, ctx)
+		if err != nil {
+			if err != nil {
+				logger.Error(err, "Failed to update status", "Core.Namespace", core.Namespace, "Core.Name", core.Name)
+			}
+		}
+
+		// update status
+		err = r.Client.Status().Update(ctx, core)
+		if err != nil {
+			logger.Error(err, "Failed to update Core status")
+		}
+	}()
+
 	// Check if the statefulset already exists, if not create a new one
 	found := &appsv1.StatefulSet{}
 	err = r.Get(ctx, types.NamespacedName{Name: core.Name, Namespace: core.Namespace}, found)
 	if err != nil && errors.IsNotFound(err) {
+
 		// Define a new statefulset
 		dep, err := r.statefulsetForCore(core)
 		if err != nil {
@@ -92,6 +111,7 @@ func (r *CoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 			return ctrl.Result{}, err
 		}
 		// StatefulSet created successfully - return and requeue
+		events = append(events, "core StatefulSet created successfully")
 		return ctrl.Result{Requeue: true}, nil
 	} else if err != nil {
 		logger.Error(err, "Failed to get StatefulSet")
@@ -152,25 +172,14 @@ func (r *CoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	}
 
 	logger.Info("Ensuring StatefulSet")
-	result, err := ensureSpec(core.Spec.Replicas, found, core.Spec.NodeSpec, r.Client)
+	result, ev, err := ensureSpec(core.Spec.Replicas, found, core.Spec.NodeSpec, r.Client)
 	if err != nil || result.Requeue {
+		if ev != nil {
+			events = append(events, ev...)
+		}
+
 		if err != nil {
 			logger.Error(err, "Failed to update StatefulSet", "StatefulSet.Namespace", found.Namespace, "StatefulSet.Name", found.Name)
-		}
-		return result, err
-	}
-
-	result, err = updateStatus(core.Namespace, labelsForCore(core.Name), core.Status.Nodes, r.Client, func(pods []string) (ctrl.Result, error) {
-		core.Status.Nodes = pods
-		err := r.Status().Update(ctx, core)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, nil
-	})
-	if err != nil || result.Requeue {
-		if err != nil {
-			logger.Error(err, "Failed to update status", "Core.Namespace", found.Namespace, "Core.Name", found.Name)
 		}
 		return result, err
 	}
@@ -195,7 +204,7 @@ func (r *CoreReconciler) statefulsetForCore(core *nodev1alpha1.Core) (*appsv1.St
 		core.Namespace,
 		ls,
 		core.Spec.NodeSpec,
-		true,
+		core.Spec.NodeOpSecretVolume,
 	)
 
 	// Set Relay instance as the owner and controller
