@@ -6,13 +6,13 @@ metadata:
     app.kubernetes.io/name: clusterrole
     app.kubernetes.io/instance: relay-viewer-role
     app.kubernetes.io/component: rbac
-    app.kubernetes.io/created-by: af-operator
-    app.kubernetes.io/part-of: af-operator
+    app.kubernetes.io/created-by: cardano-operator
+    app.kubernetes.io/part-of: cardano-operator
     app.kubernetes.io/managed-by: kustomize
   name: relay-viewer-role
 rules:
 - apiGroups:
-  - node.apexfusion.com
+  - node.cardano.io
   resources:
   - relays
   verbs:
@@ -20,7 +20,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - node.apexfusion.com
+  - node.cardano.io
   resources:
   - relays/status
   verbs:

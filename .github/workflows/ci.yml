@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  format:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Format
+      run: |
+        set -e
+        make fmt
+
+  vet:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Vet
+      run: |
+        set -e
+        make vet
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Test
+      run: |
+        set -e
+        make test
+    
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Lint
+      run: |
+        set -e
+        make lint
+
+  build-push:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build the Docker image
+      env: # Or as an environment variable
+        docker_tenancy: ${{ secrets.DockerTenancy }}
+        docker_secret: ${{ secrets.DockerSecret }}
+        docker_username: ${{ secrets.DockerUsername }}
+      run: |
+        docker login phx.ocir.io -u ${docker_tenancy}/${docker_username} -p ${docker_secret}
+        make docker-build IMG=phx.ocir.io/${docker_tenancy}/cardano-operator:$GITHUB_SHA
+    - name: Push the Docker image
+      if: github.event_name != 'pull_request'
+      env: # Or as an environment variable
+        docker_tenancy: ${{ secrets.DockerTenancy }}
+        docker_secret: ${{ secrets.DockerSecret }}
+        docker_username: ${{ secrets.DockerUsername }}
+      run: |
+        docker login phx.ocir.io -u ${docker_tenancy}/${docker_username} -p ${docker_secret}
+        make docker-push IMG=phx.ocir.io/${docker_tenancy}/cardano-operator:$GITHUB_SHA
+        # tag the image as latest
+        docker tag phx.ocir.io/${docker_tenancy}/cardano-operator:$GITHUB_SHA phx.ocir.io/${docker_tenancy}/cardano-operator:latest
+        make docker-push IMG=phx.ocir.io/${docker_tenancy}/cardano-operator:latest
+
+

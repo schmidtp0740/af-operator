@@ -30,7 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	nodev1alpha1 "github.com/schmidtp0740/af-operator/api/v1alpha1"
+	nodev1alpha1 "github.com/schmidtp0740/cardano-operator/api/v1alpha1"
 )
 
 // CoreReconciler reconciles a Core object
@@ -39,9 +39,9 @@ type CoreReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-//+kubebuilder:rbac:groups=node.apexfusion.com,resources=cores,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=node.apexfusion.com,resources=cores/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=node.apexfusion.com,resources=cores/finalizers,verbs=update
+//+kubebuilder:rbac:groups=node.cardano.io,resources=cores,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=node.cardano.io,resources=cores/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=node.cardano.io,resources=cores/finalizers,verbs=update
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;update;patch
 // +kubebuilder:rbac:groups=core,resources=services,verbs=get;list;create;update;patch;delete
@@ -80,7 +80,11 @@ func (r *CoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	err = r.Get(ctx, types.NamespacedName{Name: core.Name, Namespace: core.Namespace}, found)
 	if err != nil && errors.IsNotFound(err) {
 		// Define a new statefulset
-		dep := r.statefulsetForCore(core)
+		dep, err := r.statefulsetForCore(core)
+		if err != nil {
+			logger.Error(err, "Failed to create new StatefulSet", "StatefulSet.Namespace", dep.Namespace, "StatefulSet.Name", dep.Name)
+			return ctrl.Result{Requeue: true}, nil
+		}
 		logger.Info("Creating a new Statefuleset", "StatefulSet.Namespace", dep.Namespace, "StatefulSet.Name", dep.Name)
 		err = r.Create(ctx, dep)
 		if err != nil {
@@ -129,7 +133,11 @@ func (r *CoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	err = r.Get(ctx, types.NamespacedName{Name: core.Name, Namespace: core.Namespace}, foundSvc)
 	if err != nil && errors.IsNotFound(err) {
 		// Define a new service
-		svc := r.serviceForCore(core)
+		svc, err := r.serviceForCore(core)
+		if err != nil {
+			logger.Error(err, "Failed to create new Service", "Service.Namespace", svc.Namespace, "Service.Name", svc.Name)
+			return ctrl.Result{Requeue: true}, err
+		}
 		logger.Info("Creating a new Service", "Service.Namespace", svc.Namespace, "Service.Name", svc.Name)
 		err = r.Create(ctx, svc)
 		if err != nil {
@@ -143,6 +151,7 @@ func (r *CoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, err
 	}
 
+	logger.Info("Ensuring StatefulSet")
 	result, err := ensureSpec(core.Spec.Replicas, found, core.Spec.NodeSpec, r.Client)
 	if err != nil || result.Requeue {
 		if err != nil {
@@ -151,7 +160,7 @@ func (r *CoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return result, err
 	}
 
-	result, err = updateStatus(core.Name, core.Namespace, labelsForCore(core.Name), core.Status.Nodes, r.Client, func(pods []string) (ctrl.Result, error) {
+	result, err = updateStatus(core.Namespace, labelsForCore(core.Name), core.Status.Nodes, r.Client, func(pods []string) (ctrl.Result, error) {
 		core.Status.Nodes = pods
 		err := r.Status().Update(ctx, core)
 		if err != nil {
@@ -166,21 +175,20 @@ func (r *CoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return result, err
 	}
 
-	return ctrl.Result{}, nil
+	return result, nil
 }
 
 // serviceForCore returns a Relay Service object
-func (r *CoreReconciler) serviceForCore(core *nodev1alpha1.Core) *corev1.Service {
+func (r *CoreReconciler) serviceForCore(core *nodev1alpha1.Core) (*corev1.Service, error) {
 	ls := labelsForCore(core.Name)
 
 	svc := generateNodeService(core.Name, core.Namespace, ls, core.Spec.Service)
 
 	// Set Core instance as the owner and controller
-	ctrl.SetControllerReference(core, svc, r.Scheme)
-	return svc
+	return svc, ctrl.SetControllerReference(core, svc, r.Scheme)
 }
 
-func (r *CoreReconciler) statefulsetForCore(core *nodev1alpha1.Core) *appsv1.StatefulSet {
+func (r *CoreReconciler) statefulsetForCore(core *nodev1alpha1.Core) (*appsv1.StatefulSet, error) {
 	ls := labelsForCore(core.Name)
 
 	state := generateNodeStatefulset(core.Name,
@@ -191,8 +199,8 @@ func (r *CoreReconciler) statefulsetForCore(core *nodev1alpha1.Core) *appsv1.Sta
 	)
 
 	// Set Relay instance as the owner and controller
-	ctrl.SetControllerReference(core, state, r.Scheme)
-	return state
+
+	return state, ctrl.SetControllerReference(core, state, r.Scheme)
 }
 
 // labelsForCore returns the labels for selecting the resources

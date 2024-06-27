@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"strings"
 
-	nodev1alpha1 "github.com/schmidtp0740/af-operator/api/v1alpha1"
+	nodev1alpha1 "github.com/schmidtp0740/cardano-operator/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,6 +32,7 @@ func generateNodeStatefulset(name string,
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Labels:    labels,
 		},
 	}
 
@@ -163,10 +164,6 @@ func generateNodeStatefulset(name string,
 
 	state.Spec.Template.Spec.Containers = append(state.Spec.Template.Spec.Containers, cardanoNode)
 
-	// the inputoutput images need to have their genesis files moved to a generalized filepath
-	// create InitContainers to move genesis files to /genesis
-	addOrRemoveInputOutputContainer(nodeSpec.Image, state)
-
 	if coreNode {
 		defaultMode := int32(0400)
 		state.Spec.Template.Spec.Volumes = append(state.Spec.Template.Spec.Volumes, corev1.Volume{
@@ -226,6 +223,7 @@ func generateNodeService(name string,
 		Name:        name,
 		Namespace:   namespace,
 		Annotations: service.Annotations,
+		Labels:      labels,
 	}
 
 	svc.Spec.Selector = labels
@@ -299,14 +297,19 @@ func ensureSpec(replicas int32, found *appsv1.StatefulSet, nodeSpec nodev1alpha1
 
 // getPodNames returns the pod names of the array of pods passed in
 func getPodNames(pods []corev1.Pod) []string {
-	var podNames []string
+
+	if len(pods) == 0 {
+		return nil
+	}
+
+	podNames := []string{}
 	for _, pod := range pods {
 		podNames = append(podNames, pod.Name)
 	}
 	return podNames
 }
 
-func updateStatus(name string, namespace string, labels map[string]string, nodes []string, r client.Client, fn func([]string) (ctrl.Result, error)) (ctrl.Result, error) {
+func updateStatus(namespace string, labels map[string]string, nodes []string, r client.Client, fn func([]string) (ctrl.Result, error)) (ctrl.Result, error) {
 
 	ctx := context.Background()
 
@@ -507,5 +510,5 @@ func addOrRemoveInputOutputContainer(image string, state *appsv1.StatefulSet) {
 			break
 		}
 	}
-	return
+
 }

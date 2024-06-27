@@ -1,12 +1,12 @@
-apiVersion: node.apexfusion.com/v1alpha1
+apiVersion: node.cardano.io/v1alpha1
 kind: Relay
 metadata:
   labels:
     app.kubernetes.io/name: relay
     app.kubernetes.io/instance: relay-sample
-    app.kubernetes.io/part-of: af-operator
+    app.kubernetes.io/part-of: cardano-operator
     app.kubernetes.io/managed-by: kustomize
-    app.kubernetes.io/created-by: af-operator
+    app.kubernetes.io/created-by: cardano-operator
   name: af-relay
 spec:
   replicas: 1
