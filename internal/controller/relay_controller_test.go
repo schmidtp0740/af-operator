@@ -315,7 +315,7 @@ var _ = Describe("Relay Controller", func() {
 
 		})
 
-		It("should successfully update the relay resource", func() {
+		It("should successfully update the relay replicas", func() {
 
 			// Reconcile to initially create the resource
 			Eventually(func() bool {
@@ -366,6 +366,27 @@ var _ = Describe("Relay Controller", func() {
 				return *f.Spec.Replicas
 			}, timeout, interval).Should(Equal(int32(2)))
 
+		})
+
+		It("should successfully update the relay image", func() {
+
+			// Reconcile to initially create the resource
+			Eventually(func() bool {
+				recon, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+					NamespacedName: typeNamespacedName,
+				})
+				Expect(err).NotTo(HaveOccurred())
+				return recon.Requeue
+
+			}, timeout, interval).Should(BeFalse())
+
+			// check core image
+			Eventually(func() string {
+				f := &nodev1alpha1.Relay{}
+				_ = k8sClient.Get(context.Background(), typeNamespacedName, f)
+				return f.Spec.Image
+			}, timeout, interval).Should(Equal("alpine:latest"))
+
 			By("Update image")
 			newImageName := "ubuntu:latest"
 			relayResource.Spec.Image = newImageName
@@ -391,6 +412,72 @@ var _ = Describe("Relay Controller", func() {
 				}
 				return ""
 			}, timeout, interval).Should(Equal(newImageName))
+
+		})
+
+		It("should successfully update the relay resources", func() {
+			// Reconcile to initially create the resource
+			Eventually(func() bool {
+				recon, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+					NamespacedName: typeNamespacedName,
+				})
+				Expect(err).NotTo(HaveOccurred())
+				return recon.Requeue
+
+			}, timeout, interval).Should(BeFalse())
+
+			// check statefulset resource requests and limits
+			Eventually(func() v1.ResourceRequirements {
+				f := &appsv1.StatefulSet{}
+				_ = k8sClient.Get(context.Background(), typeNamespacedName, f)
+				return f.Spec.Template.Spec.Containers[0].Resources
+			}, timeout, interval).Should(Equal(v1.ResourceRequirements{
+				Requests: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("100m"),
+					v1.ResourceMemory: resource.MustParse("128Mi"),
+				},
+				Limits: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("200m"),
+					v1.ResourceMemory: resource.MustParse("256Mi"),
+				},
+			}))
+
+			By("Update core resources requests and limits")
+			relayResource.Spec.Resources.Requests = v1.ResourceList{
+				v1.ResourceCPU:    resource.MustParse("200m"),
+				v1.ResourceMemory: resource.MustParse("256Mi"),
+			}
+			relayResource.Spec.Resources.Limits = v1.ResourceList{
+				v1.ResourceCPU:    resource.MustParse("400m"),
+				v1.ResourceMemory: resource.MustParse("512Mi"),
+			}
+			Expect(k8sClient.Update(context.Background(), relayResource)).Should(Succeed())
+
+			// Keep reconciling until the requeue is false
+			Eventually(func() bool {
+				recon, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+					NamespacedName: typeNamespacedName,
+				})
+				Expect(err).NotTo(HaveOccurred())
+				return recon.Requeue
+
+			}, timeout, interval).Should(BeFalse())
+
+			// check statefulset resource requests and limits
+			Eventually(func() v1.ResourceRequirements {
+				f := &appsv1.StatefulSet{}
+				_ = k8sClient.Get(context.Background(), typeNamespacedName, f)
+				return f.Spec.Template.Spec.Containers[0].Resources
+			}, timeout, interval).Should(Equal(v1.ResourceRequirements{
+				Requests: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("200m"),
+					v1.ResourceMemory: resource.MustParse("256Mi"),
+				},
+				Limits: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("400m"),
+					v1.ResourceMemory: resource.MustParse("512Mi"),
+				},
+			}))
 
 		})
 

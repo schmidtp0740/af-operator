@@ -279,6 +279,19 @@ func ensureSpec(replicas int32, found *appsv1.StatefulSet, nodeSpec nodev1alpha1
 		}
 	}
 
+	// ensure the statefulset resources are the same as the spec
+	for key, container := range found.Spec.Template.Spec.Containers {
+		if strings.EqualFold(container.Name, "cardano-node") && !reflect.DeepEqual(container.Resources, nodeSpec.Resources) {
+			found.Spec.Template.Spec.Containers[key].Resources = nodeSpec.Resources
+			err := r.Update(ctx, found)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			// Spec updated - return and requeue
+			return ctrl.Result{Requeue: true}, nil
+		}
+	}
+
 	return ctrl.Result{}, nil
 }
 

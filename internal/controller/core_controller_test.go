@@ -319,7 +319,7 @@ var _ = Describe("Core Controller", func() {
 
 		})
 
-		It("should successfully update the core resource", func() {
+		It("should successfully update the core replicas", func() {
 
 			// Reconcile to initially create the resource
 			Eventually(func() bool {
@@ -370,6 +370,27 @@ var _ = Describe("Core Controller", func() {
 				return *f.Spec.Replicas
 			}, timeout, interval).Should(Equal(int32(2)))
 
+		})
+
+		It("should successfully update the core image", func() {
+
+			// Reconcile to initially create the resource
+			Eventually(func() bool {
+				recon, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+					NamespacedName: typeNamespacedName,
+				})
+				Expect(err).NotTo(HaveOccurred())
+				return recon.Requeue
+
+			}, timeout, interval).Should(BeFalse())
+
+			// check core image
+			Eventually(func() string {
+				f := &nodev1alpha1.Core{}
+				_ = k8sClient.Get(context.Background(), typeNamespacedName, f)
+				return f.Spec.Image
+			}, timeout, interval).Should(Equal("alpine:latest"))
+
 			By("Update image")
 			newImageName := "ubuntu:latest"
 			coreResource.Spec.Image = newImageName
@@ -395,6 +416,72 @@ var _ = Describe("Core Controller", func() {
 				}
 				return ""
 			}, timeout, interval).Should(Equal(newImageName))
+
+		})
+
+		It("should successfully update the core resources", func() {
+			// Reconcile to initially create the resource
+			Eventually(func() bool {
+				recon, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+					NamespacedName: typeNamespacedName,
+				})
+				Expect(err).NotTo(HaveOccurred())
+				return recon.Requeue
+
+			}, timeout, interval).Should(BeFalse())
+
+			// check statefulset resource requests and limits
+			Eventually(func() v1.ResourceRequirements {
+				f := &appsv1.StatefulSet{}
+				_ = k8sClient.Get(context.Background(), typeNamespacedName, f)
+				return f.Spec.Template.Spec.Containers[0].Resources
+			}, timeout, interval).Should(Equal(v1.ResourceRequirements{
+				Requests: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("100m"),
+					v1.ResourceMemory: resource.MustParse("128Mi"),
+				},
+				Limits: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("200m"),
+					v1.ResourceMemory: resource.MustParse("256Mi"),
+				},
+			}))
+
+			By("Update core resources requests and limits")
+			coreResource.Spec.Resources.Requests = v1.ResourceList{
+				v1.ResourceCPU:    resource.MustParse("200m"),
+				v1.ResourceMemory: resource.MustParse("256Mi"),
+			}
+			coreResource.Spec.Resources.Limits = v1.ResourceList{
+				v1.ResourceCPU:    resource.MustParse("400m"),
+				v1.ResourceMemory: resource.MustParse("512Mi"),
+			}
+			Expect(k8sClient.Update(context.Background(), coreResource)).Should(Succeed())
+
+			// Keep reconciling until the requeue is false
+			Eventually(func() bool {
+				recon, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+					NamespacedName: typeNamespacedName,
+				})
+				Expect(err).NotTo(HaveOccurred())
+				return recon.Requeue
+
+			}, timeout, interval).Should(BeFalse())
+
+			// check statefulset resource requests and limits
+			Eventually(func() v1.ResourceRequirements {
+				f := &appsv1.StatefulSet{}
+				_ = k8sClient.Get(context.Background(), typeNamespacedName, f)
+				return f.Spec.Template.Spec.Containers[0].Resources
+			}, timeout, interval).Should(Equal(v1.ResourceRequirements{
+				Requests: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("200m"),
+					v1.ResourceMemory: resource.MustParse("256Mi"),
+				},
+				Limits: v1.ResourceList{
+					v1.ResourceCPU:    resource.MustParse("400m"),
+					v1.ResourceMemory: resource.MustParse("512Mi"),
+				},
+			}))
 
 		})
 
