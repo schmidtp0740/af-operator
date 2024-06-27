@@ -3,18 +3,57 @@ name: CD
 on:
   pull_request:
     branches: [ "main" ]
-  workflow_run:
-    workflows: ["CI"]
-    types:
-      - completed
 
 jobs:
-  deploy:
+  # build-push:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - uses: actions/checkout@v4
+  #   - name: Build the Docker image
+  #     env: # Or as an environment variable
+  #       docker_tenancy: ${{ secrets.DockerTenancy }}
+  #       docker_secret: ${{ secrets.DockerSecret }}
+  #       docker_username: ${{ secrets.DockerUsername }}
+  #     run: |
+  #       docker login phx.ocir.io -u ${docker_tenancy}/${docker_username} -p ${docker_secret}
+  #       make docker-build IMG=phx.ocir.io/${docker_tenancy}/cardano-operator:$GITHUB_SHA
+  #   - name: Push the Docker image
+  #     if: github.event_name != 'pull_request'
+  #     env: # Or as an environment variable
+  #       docker_tenancy: ${{ secrets.DockerTenancy }}
+  #       docker_secret: ${{ secrets.DockerSecret }}
+  #       docker_username: ${{ secrets.DockerUsername }}
+  #     run: |
+  #       docker login phx.ocir.io -u ${docker_tenancy}/${docker_username} -p ${docker_secret}
+  #       make docker-push IMG=phx.ocir.io/${docker_tenancy}/cardano-operator:$GITHUB_SHA
+  #       # tag the image as latest
+  #       docker tag phx.ocir.io/${docker_tenancy}/cardano-operator:$GITHUB_SHA phx.ocir.io/${docker_tenancy}/cardano-operator:latest
+  #       make docker-push IMG=phx.ocir.io/${docker_tenancy}/cardano-operator:latest
 
+  deploy:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+    # Save the kubeconfig file to ~/.kube/config
+    # Then run make deploy to deploy the operator image
+    # in the cardano-operator-system namespace
     - name: Deploy
+      env: # Or as an environment variable
+        kubeconfig: ${{ secrets.Kubeconfig }}
       run: |
         set -e
-        echo "test deploy"
+
+        mkdir -p ~/.kube
+        echo "${kubeconfig}" > ~/.kube/config
+
+        # If kubectl is not installed, install it
+        if ! command -v kubectl &> /dev/null
+        then
+            echo "kubectl could not be found. Installing kubectl..."
+            curl -LO "https://dl.k8s.io/release/v1.27.2/bin/linux/amd64/kubectl"
+            chmod +x kubectl
+            sudo mv kubectl /usr/local/bin/
+        fi
+
+        kubectl get pods -A
+        
