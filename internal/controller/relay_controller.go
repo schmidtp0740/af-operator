@@ -78,7 +78,11 @@ func (r *RelayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	err = r.Get(ctx, types.NamespacedName{Name: relay.Name, Namespace: relay.Namespace}, found)
 	if err != nil && errors.IsNotFound(err) {
 		// Define a new statefulset
-		dep := r.statefulsetForRelay(relay)
+		dep, err := r.statefulsetForRelay(relay)
+		if err != nil {
+			logger.Error(err, "Failed to create new StatefulSet", "StatefulSet.Namespace", dep.Namespace, "StatefulSet.Name", dep.Name)
+			return ctrl.Result{Requeue: true}, err
+		}
 		logger.Info("Creating a new Statefuleset", "StatefulSet.Namespace", dep.Namespace, "StatefulSet.Name", dep.Name)
 		err = r.Create(ctx, dep)
 		if err != nil {
@@ -97,7 +101,11 @@ func (r *RelayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	err = r.Get(ctx, types.NamespacedName{Name: relay.Name, Namespace: relay.Namespace}, foundSvc)
 	if err != nil && errors.IsNotFound(err) {
 		// Define a new service
-		svc := r.serviceForRelay(relay)
+		svc, err := r.serviceForRelay(relay)
+		if err != nil {
+			logger.Error(err, "Failed to create new Service", "Service.Namespace", svc.Namespace, "Service.Name", svc.Name)
+			return ctrl.Result{Requeue: true}, err
+		}
 		logger.Info("Creating a new Service", "Service.Namespace", svc.Namespace, "Service.Name", svc.Name)
 		err = r.Create(ctx, svc)
 		if err != nil {
@@ -119,7 +127,7 @@ func (r *RelayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return result, err
 	}
 
-	result, err = updateStatus(relay.Name, relay.Namespace, labelsForRelay(relay.Name), relay.Status.Nodes, r.Client, func(pods []string) (ctrl.Result, error) {
+	result, err = updateStatus(relay.Namespace, labelsForRelay(relay.Name), relay.Status.Nodes, r.Client, func(pods []string) (ctrl.Result, error) {
 		relay.Status.Nodes = pods
 		err := r.Status().Update(ctx, relay)
 		if err != nil {
@@ -138,18 +146,17 @@ func (r *RelayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 }
 
 // serviceForRelay returns a Relay Service object
-func (r *RelayReconciler) serviceForRelay(relay *nodev1alpha1.Relay) *corev1.Service {
+func (r *RelayReconciler) serviceForRelay(relay *nodev1alpha1.Relay) (*corev1.Service, error) {
 	ls := labelsForRelay(relay.Name)
 
 	svc := generateNodeService(relay.Name, relay.Namespace, ls, relay.Spec.Service)
 
 	// Set Relay instance as the owner and controller
-	ctrl.SetControllerReference(relay, svc, r.Scheme)
-	return svc
+	return svc, ctrl.SetControllerReference(relay, svc, r.Scheme)
 }
 
 // statefulsetForRelay returns a Relay StatefulSet object
-func (r *RelayReconciler) statefulsetForRelay(relay *nodev1alpha1.Relay) *appsv1.StatefulSet {
+func (r *RelayReconciler) statefulsetForRelay(relay *nodev1alpha1.Relay) (*appsv1.StatefulSet, error) {
 	ls := labelsForRelay(relay.Name)
 
 	state := generateNodeStatefulset(relay.Name,
@@ -160,8 +167,7 @@ func (r *RelayReconciler) statefulsetForRelay(relay *nodev1alpha1.Relay) *appsv1
 	)
 
 	// Set Relay instance as the owner and controller
-	ctrl.SetControllerReference(relay, state, r.Scheme)
-	return state
+	return state, ctrl.SetControllerReference(relay, state, r.Scheme)
 }
 
 // labelsForRelay returns the labels for selecting the resources
