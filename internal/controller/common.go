@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -21,12 +22,15 @@ import (
 const (
 	serviceModeAnnotation = "cardano.io/mode"
 	podDesignationLabel   = "cardano.io/designation"
+	defaultCardanoPort    = 31400
+	defaultPrometheusPort = 8080
 )
 
 func generateNodeStatefulset(name string,
 	namespace string,
 	labels map[string]string,
 	nodeSpec nodev1alpha1.NodeSpec,
+	topologyConfig corev1.LocalObjectReference,
 	nodeOpSecretVolume *corev1.Volume) *appsv1.StatefulSet {
 
 	coreNode := false
@@ -56,7 +60,7 @@ func generateNodeStatefulset(name string,
 	state.Spec.Template.ObjectMeta.Annotations = map[string]string{
 		"prometheus.io/scrape": "true",
 		"prometheus.io/path":   "/metrics",
-		"prometheus.io/port":   "8080",
+		"prometheus.io/port":   fmt.Sprintf("%d", defaultPrometheusPort),
 	}
 
 	// add container volumes like node-ipc and cardano-config
@@ -79,7 +83,7 @@ func generateNodeStatefulset(name string,
 						},
 						{
 							ConfigMap: &corev1.ConfigMapProjection{
-								LocalObjectReference: nodeSpec.TopologyConfig,
+								LocalObjectReference: topologyConfig,
 							},
 						},
 						{
@@ -100,12 +104,12 @@ func generateNodeStatefulset(name string,
 	cardanoNode.Image = nodeSpec.Image
 	cardanoNode.Ports = []corev1.ContainerPort{
 		{
-			ContainerPort: 31400,
+			ContainerPort: defaultCardanoPort,
 			Protocol:      corev1.ProtocolTCP,
 			Name:          "cardano",
 		},
 		{
-			ContainerPort: 8080,
+			ContainerPort: defaultPrometheusPort,
 			Protocol:      corev1.ProtocolTCP,
 			Name:          "prometheus",
 		},
@@ -116,7 +120,7 @@ func generateNodeStatefulset(name string,
 	probe := &corev1.Probe{
 		ProbeHandler: corev1.ProbeHandler{
 			TCPSocket: &corev1.TCPSocketAction{
-				Port: intstr.FromInt(31400),
+				Port: intstr.FromInt(defaultCardanoPort),
 			},
 		},
 		InitialDelaySeconds: 15,
@@ -136,7 +140,7 @@ func generateNodeStatefulset(name string,
 		"--config", "/configuration/configuration.yaml",
 		"--database-path", "/data/db",
 		"--host-addr", "0.0.0.0",
-		"--port", "31400",
+		"--port", fmt.Sprintf("%d", defaultCardanoPort),
 		"--socket-path", "/ipc/node.socket",
 		"--topology", "/configuration/topology.json",
 	}
@@ -258,7 +262,7 @@ func generateNodeService(name string,
 	return svc
 }
 
-func ensureSpec(replicas int32, found *appsv1.StatefulSet, nodeSpec nodev1alpha1.NodeSpec, r client.Client) (ctrl.Result, []string, error) {
+func ensureStatefulsetSpec(replicas int32, found *appsv1.StatefulSet, nodeSpec nodev1alpha1.NodeSpec, r client.Client) (ctrl.Result, []string, error) {
 
 	ctx := context.Background()
 
@@ -431,4 +435,85 @@ func updateStatus(events []string, status *nodev1alpha1.NodeStatus, namespace st
 	}
 
 	return nil
+}
+
+func createTopologyConfigMap(name string, namespace string, protocol string, network string, nodeSvc []string, addProducerNodes bool) (*corev1.ConfigMap, error) {
+
+	topology := generateTopologyConfig(protocol, network, nodeSvc, addProducerNodes)
+
+	// convert topology to json string
+	topologyJSON, err := json.Marshal(topology)
+	if err != nil {
+		return nil, err
+	}
+
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-topology", name),
+			Namespace: namespace,
+		},
+		Data: map[string]string{
+			"topology.json": string(topologyJSON),
+		},
+	}, nil
+}
+
+// generateTopologyConfig generates the topology.json file for the cardano-node
+func generateTopologyConfig(protocol string, network string, nodeSvc []string, addDefaultProducerNodes bool) Topology {
+	topology := Topology{
+		LocalRoots:         make([]TopologyRoot, 0),
+		PublicRoots:        make([]TopologyRoot, 0),
+		UseLedgerAfterSlot: 0,
+	}
+
+	// if the protocol is apexfusion, network is testnet
+	// add addDefaultProducerNodes is true
+	// the add the following addresses and their respective ports
+	// address: relay-0.prime.testnet.apexfusion.org port: 31400
+	// address: relay-1.prime.testnet.apexfusion.org port: 31400
+	if addDefaultProducerNodes {
+		if protocol == "apexfusion" && network == "testnet" {
+			topology.PublicRoots = []TopologyRoot{
+				{
+					AccessPoints: []TopologyRootAccessPoint{
+						{
+							Address: "relay-0.prime.testnet.apexfusion.org",
+							Port:    5521,
+						},
+						{
+							Address: "relay-1.prime.testnet.apexfusion.org",
+							Port:    5521,
+						},
+					},
+					Advertise: true,
+					Valency:   1,
+				},
+			}
+		}
+	}
+
+	// default is no public roots
+	if len(topology.PublicRoots) == 0 {
+		topology.PublicRoots = []TopologyRoot{
+			{
+				AccessPoints: []TopologyRootAccessPoint{},
+				Advertise:    false,
+			},
+		}
+	}
+
+	for i := 0; i < len(nodeSvc); i++ {
+		topology.LocalRoots = append(topology.LocalRoots, TopologyRoot{
+			AccessPoints: []TopologyRootAccessPoint{
+				{
+					Address: nodeSvc[i],
+					Port:    defaultCardanoPort,
+				},
+			},
+			Advertise: false,
+			Valency:   1,
+		})
+	}
+
+	return topology
 }

@@ -68,6 +68,16 @@ spec:
                   type: object
                   x-kubernetes-map-type: atomic
                 type: array
+              localPeers:
+                description: LocalPeers is a list of local peers to connect to
+                items:
+                  type: string
+                type: array
+              network:
+                description: 'Possible value for network are: testnet'
+                enum:
+                - testnet
+                type: string
               nodeOpSecretVolume:
                 description: Volume represents a named volume in a pod that may be
                   accessed by any container in the pod.
@@ -1599,6 +1609,11 @@ spec:
                 required:
                 - name
                 type: object
+              protocol:
+                description: 'Possible values for protocol are: apexfusion'
+                enum:
+                - apexfusion
+                type: string
               replicas:
                 format: int32
                 type: integer
@@ -1868,18 +1883,10 @@ spec:
                       backing this claim.
                     type: string
                 type: object
-              topology:
-                description: LocalObjectReference contains enough information to let
-                  you locate the referenced object inside the same namespace.
-                properties:
-                  name:
-                    description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                      TODO: Add other useful fields. apiVersion, kind, uid?'
-                    type: string
-                type: object
-                x-kubernetes-map-type: atomic
             required:
+            - network
             - nodeOpSecretVolume
+            - protocol
             - replicas
             - storage
             type: object

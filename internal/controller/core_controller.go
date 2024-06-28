@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -77,21 +78,34 @@ func (r *CoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 		return ctrl.Result{}, err
 	}
 
-	// defer update status
-	defer func() {
-		err := updateStatus(events, &core.Status, core.Namespace, core.Name, r.Client, ctx)
+	// Check if topology configmap already exists, if not create a new one
+	topologyConfigMap, err := createTopologyConfigMap(fmt.Sprintf("%s-%s", "core", core.Name), core.Namespace, core.Spec.Protocol, core.Spec.Network, core.Spec.LocalPeers, false)
+	if err != nil {
+		logger.Error(err, "Failed to create new ConfigMap", "ConfigMap.Namespace", topologyConfigMap.Namespace, "ConfigMap.Name", topologyConfigMap.Name)
+		return ctrl.Result{}, err
+	}
+	err = r.Get(ctx, types.NamespacedName{Name: topologyConfigMap.Name, Namespace: core.Namespace}, topologyConfigMap)
+	if err != nil && errors.IsNotFound(err) {
+		topologyConfigMap, err := createTopologyConfigMap(fmt.Sprintf("%s-%s", "core", core.Name), core.Namespace, core.Spec.Protocol, core.Spec.Network, core.Spec.LocalPeers, false)
 		if err != nil {
-			if err != nil {
-				logger.Error(err, "Failed to update status", "Core.Namespace", core.Namespace, "Core.Name", core.Name)
-			}
+			logger.Error(err, "Failed to create new ConfigMap", "ConfigMap.Namespace", topologyConfigMap.Namespace, "ConfigMap.Name", topologyConfigMap.Name)
+			return ctrl.Result{}, err
 		}
+		logger.Info("Creating a new ConfigMap", "ConfigMap.Namespace", topologyConfigMap.Namespace, "ConfigMap.Name", topologyConfigMap.Name)
+		err = r.Create(ctx, topologyConfigMap)
+		if err != nil {
+			logger.Error(err, "Failed to create new ConfigMap", "ConfigMap.Namespace", topologyConfigMap.Namespace, "ConfigMap.Name", topologyConfigMap.Name)
+			return ctrl.Result{}, err
+		}
+		// ConfigMap created successfully - return and requeue
+		return ctrl.Result{Requeue: true}, nil
 
-		// update status
-		err = r.Client.Status().Update(ctx, core)
-		if err != nil {
-			logger.Error(err, "Failed to update Core status")
-		}
-	}()
+	} else if err != nil {
+		logger.Error(err, "Failed to get ConfigMap")
+		return ctrl.Result{}, err
+	}
+
+	// TODO ensure that configmap is as exected
 
 	// Check if the statefulset already exists, if not create a new one
 	found := &appsv1.StatefulSet{}
@@ -99,7 +113,7 @@ func (r *CoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	if err != nil && errors.IsNotFound(err) {
 
 		// Define a new statefulset
-		dep, err := r.statefulsetForCore(core)
+		dep, err := r.statefulsetForCore(core, topologyConfigMap)
 		if err != nil {
 			logger.Error(err, "Failed to create new StatefulSet", "StatefulSet.Namespace", dep.Namespace, "StatefulSet.Name", dep.Name)
 			return ctrl.Result{Requeue: true}, nil
@@ -111,7 +125,6 @@ func (r *CoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 			return ctrl.Result{}, err
 		}
 		// StatefulSet created successfully - return and requeue
-		events = append(events, "core StatefulSet created successfully")
 		return ctrl.Result{Requeue: true}, nil
 	} else if err != nil {
 		logger.Error(err, "Failed to get StatefulSet")
@@ -172,16 +185,28 @@ func (r *CoreReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	}
 
 	logger.Info("Ensuring StatefulSet")
-	result, ev, err := ensureSpec(core.Spec.Replicas, found, core.Spec.NodeSpec, r.Client)
+	result, ev, err := ensureStatefulsetSpec(core.Spec.Replicas, found, core.Spec.NodeSpec, r.Client)
 	if err != nil || result.Requeue {
-		if ev != nil {
-			events = append(events, ev...)
-		}
 
 		if err != nil {
 			logger.Error(err, "Failed to update StatefulSet", "StatefulSet.Namespace", found.Namespace, "StatefulSet.Name", found.Name)
 		}
 		return result, err
+	}
+
+	events = append(events, ev...)
+
+	err = updateStatus(events, &core.Status, core.Namespace, core.Name, r.Client, ctx)
+	if err != nil {
+		if err != nil {
+			logger.Error(err, "Failed to update status", "Core.Namespace", core.Namespace, "Core.Name", core.Name)
+		}
+	}
+
+	// update status
+	err = r.Client.Status().Update(ctx, core)
+	if err != nil {
+		logger.Error(err, "Failed to update Core status")
 	}
 
 	return result, nil
@@ -197,13 +222,15 @@ func (r *CoreReconciler) serviceForCore(core *nodev1alpha1.Core) (*corev1.Servic
 	return svc, ctrl.SetControllerReference(core, svc, r.Scheme)
 }
 
-func (r *CoreReconciler) statefulsetForCore(core *nodev1alpha1.Core) (*appsv1.StatefulSet, error) {
+func (r *CoreReconciler) statefulsetForCore(core *nodev1alpha1.Core, topologyConfigMap *corev1.ConfigMap) (*appsv1.StatefulSet, error) {
 	ls := labelsForCore(core.Name)
 
+	topologyConfigLocalObjectReference := corev1.LocalObjectReference{Name: topologyConfigMap.Name}
 	state := generateNodeStatefulset(core.Name,
 		core.Namespace,
 		ls,
 		core.Spec.NodeSpec,
+		topologyConfigLocalObjectReference,
 		core.Spec.NodeOpSecretVolume,
 	)
 
