@@ -71,7 +71,7 @@ spec:
         args:
         - --leader-elect
         image: controller:latest
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         name: manager
         securityContext:
           allowPrivilegeEscalation: false
@@ -100,6 +100,4 @@ spec:
             cpu: 10m
             memory: 64Mi
       serviceAccountName: controller-manager
-      imagePullSecrets:
-        - name: ocirsecret
       terminationGracePeriodSeconds: 10

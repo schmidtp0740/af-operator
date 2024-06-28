@@ -19,6 +19,8 @@ package e2e
 import (
 	"fmt"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -31,6 +33,11 @@ const namespace = "cardano-operator-system"
 
 var _ = Describe("controller", Ordered, func() {
 	BeforeAll(func() {
+		By("Change the kubeconfig context to the docker-desktop cluster")
+		cmd := exec.Command("kubectl", "config", "use-context", "docker-desktop")
+		_, err := utils.Run(cmd)
+		Expect(err).NotTo(HaveOccurred())
+
 		By("installing prometheus operator")
 		Expect(utils.InstallPrometheusOperator()).To(Succeed())
 
@@ -38,8 +45,9 @@ var _ = Describe("controller", Ordered, func() {
 		Expect(utils.InstallCertManager()).To(Succeed())
 
 		By("creating manager namespace")
-		cmd := exec.Command("kubectl", "create", "ns", namespace)
+		cmd = exec.Command("kubectl", "create", "ns", namespace)
 		_, _ = utils.Run(cmd)
+
 	})
 
 	AfterAll(func() {
@@ -58,18 +66,21 @@ var _ = Describe("controller", Ordered, func() {
 		It("should run successfully", func() {
 			var controllerPodName string
 			var err error
+			projectDir, _ := utils.GetProjectDir()
 
 			// projectimage stores the name of the image used in the example
-			var projectimage = "example.com/cardano-operator:v0.0.1"
+			// use random image name to avoid conflicts with other tests
+			imageTag := fmt.Sprintf("%d", time.Now().Unix())
+			var projectimage = "cardano-operator:" + imageTag
 
 			By("building the manager(Operator) image")
 			cmd := exec.Command("make", "docker-build", fmt.Sprintf("IMG=%s", projectimage))
 			_, err = utils.Run(cmd)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
-			By("loading the the manager(Operator) image on Kind")
-			err = utils.LoadImageToKindClusterWithName(projectimage)
-			ExpectWithOffset(1, err).NotTo(HaveOccurred())
+			// By("loading the the manager(Operator) image on Kind")
+			// err = utils.LoadImageToKindClusterWithName(projectimage)
+			// ExpectWithOffset(1, err).NotTo(HaveOccurred())
 
 			By("installing CRDs")
 			cmd = exec.Command("make", "install")
@@ -116,6 +127,30 @@ var _ = Describe("controller", Ordered, func() {
 				return nil
 			}
 			EventuallyWithOffset(1, verifyControllerUp, time.Minute, time.Second).Should(Succeed())
+
+			By("creating a Cardano relay resource")
+			EventuallyWithOffset(1, func() error {
+				cmd = exec.Command("kubectl", "apply", "-f", filepath.Join(projectDir,
+					"config/samples/node_v1alpha1_relay.yaml"), "-n", namespace)
+				_, err = utils.Run(cmd)
+				return err
+			}, time.Minute, time.Second).Should(Succeed())
+
+			By("validating that pod(s) status.phase=Running")
+			getRelayPodStatus := func() error {
+				cmd = exec.Command("kubectl", "get",
+					"pods", "-l", "relay_cr=cardano-relay",
+					"-o", "jsonpath={.items[*].status}", "-n", namespace,
+				)
+				status, err := utils.Run(cmd)
+				fmt.Println(string(status))
+				ExpectWithOffset(2, err).NotTo(HaveOccurred())
+				if !strings.Contains(string(status), "\"phase\":\"Running\"") {
+					return fmt.Errorf("cardano relay pod in %s status", status)
+				}
+				return nil
+			}
+			EventuallyWithOffset(1, getRelayPodStatus, time.Minute, time.Second).Should(Succeed())
 
 		})
 	})
