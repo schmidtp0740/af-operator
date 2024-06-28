@@ -127,11 +127,17 @@ var _ = Describe("controller", Ordered, func() {
 
 	Context("Relay", func() {
 
+		var relayFilePath string
+
 		BeforeEach(func() {
+			relayFilePath = filepath.Join(projectDir, "config/samples/node_v1alpha1_relay.yaml")
+
+		})
+
+		JustBeforeEach(func() {
 			By("creating a Cardano relay resource")
 			EventuallyWithOffset(1, func() error {
-				cmd := exec.Command("kubectl", "apply", "-f", filepath.Join(projectDir,
-					"config/samples/node_v1alpha1_relay.yaml"), "-n", namespace)
+				cmd := exec.Command("kubectl", "apply", "-f", relayFilePath, "-n", namespace)
 				_, err = utils.Run(cmd)
 				return err
 			}, time.Minute, time.Second).Should(Succeed())
@@ -169,7 +175,7 @@ var _ = Describe("controller", Ordered, func() {
 
 		Context("Verify updating the replicas", func() {
 
-			BeforeEach(func() {
+			JustBeforeEach(func() {
 				By("validating that pod(s) status.phase=Running")
 				getRelayPodStatus := func() error {
 					cmd := exec.Command("kubectl", "get",
