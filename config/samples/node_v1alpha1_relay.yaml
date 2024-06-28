@@ -7,19 +7,19 @@ metadata:
     app.kubernetes.io/part-of: cardano-operator
     app.kubernetes.io/managed-by: kustomize
     app.kubernetes.io/created-by: cardano-operator
-  name: af-relay
+  name: cardano-relay
 spec:
   replicas: 1
+  protocol: apexfusion
+  network: testnet
   image: "ghcr.io/intersectmbo/cardano-node:8.7.3"
-  imagePullSecrets: 
-    - name: ocirsecret
   resources:
     requests:
-      cpu: 2
-      memory: 4Gi
+      cpu: 1
+      memory: 2Gi
     limits:
       cpu: 2
-      memory: 12Gi
+      memory: 4Gi
   storage:
     accessModes:
       - "ReadWriteOnce"
@@ -34,29 +34,7 @@ spec:
     name: 'relay-config'
   genesis:
     name: 'genesis'
-  topology: 
-    name: 'relay-topology'
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name:  'relay-topology'
-data:
-  topology.json: |
-    {
-      "localRoots": [],
-      "publicRoots" : [
-        { 
-          "accessPoints": [
-            { "address": "relay-0.prime.testnet.apexfusion.org", "port": 5521 },
-            { "address": "relay-1.prime.testnet.apexfusion.org", "port": 5521 }
-          ],
-          "advertise": true,
-          "valency": 1
-        }
-      ],
-      "useLedgerAfterSlot": 0
-    }
+
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -89,7 +67,7 @@ data:
     hasEKG: 12788
     hasPrometheus:
       - "0.0.0.0"
-      - 12789
+      - 8080
     setupScribes:
       - scKind: StdoutSK
         scName: stdout
