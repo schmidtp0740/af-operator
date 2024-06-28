@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -75,28 +76,43 @@ func (r *RelayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
-	// defer update status
-	defer func() {
-		err := updateStatus(events, &relay.Status, relay.Namespace, relay.Name, r.Client, ctx)
+	// Check if topology configmap already exists, if not create a new one
+	topologyConfigMap, err := createTopologyConfigMap(fmt.Sprintf("%s-%s", "relay", relay.Name), relay.Namespace, relay.Spec.Protocol, relay.Spec.Network, relay.Spec.LocalPeers, true)
+	if err != nil {
+		logger.Error(err, "Failed to create new ConfigMap", "ConfigMap.Namespace", topologyConfigMap.Namespace, "ConfigMap.Name", topologyConfigMap.Name)
+		return ctrl.Result{}, err
+	}
+	logger.Info("Checking for topology ConfigMap", "ConfigMap.Namespace", relay.Namespace, "ConfigMap.Name", topologyConfigMap.Name)
+	err = r.Get(ctx, types.NamespacedName{Name: topologyConfigMap.Name, Namespace: relay.Namespace}, topologyConfigMap)
+	if err != nil && errors.IsNotFound(err) {
+		topologyConfigMap, err := createTopologyConfigMap(fmt.Sprintf("%s-%s", "relay", relay.Name), relay.Namespace, relay.Spec.Protocol, relay.Spec.Network, relay.Spec.LocalPeers, true)
 		if err != nil {
-			if err != nil {
-				logger.Error(err, "Failed to update status", "Relay.Namespace", relay.Namespace, "Relay.Name", relay.Name)
-			}
+			logger.Error(err, "Failed to create new ConfigMap", "ConfigMap.Namespace", topologyConfigMap.Namespace, "ConfigMap.Name", topologyConfigMap.Name)
+			return ctrl.Result{}, err
 		}
+		logger.Info("Creating a new ConfigMap", "ConfigMap.Namespace", topologyConfigMap.Namespace, "ConfigMap.Name", topologyConfigMap.Name)
+		logger.Info("ConfigMap", "ConfigMap", topologyConfigMap.String())
+		err = r.Create(ctx, topologyConfigMap)
+		if err != nil {
+			logger.Error(err, "Failed to create new ConfigMap", "ConfigMap.Namespace", topologyConfigMap.Namespace, "ConfigMap.Name", topologyConfigMap.Name)
+			return ctrl.Result{}, err
+		}
+		// ConfigMap created successfully - return and requeue
+		return ctrl.Result{Requeue: true}, nil
 
-		// update status
-		err = r.Client.Status().Update(ctx, relay)
-		if err != nil {
-			logger.Error(err, "Failed to update Core status")
-		}
-	}()
+	} else if err != nil {
+		logger.Error(err, "Failed to get ConfigMap")
+		return ctrl.Result{}, err
+	}
+
+	// TODO ensure that configmap is as exected
 
 	// Check if the statefulset already exists, if not create a new one
 	found := &appsv1.StatefulSet{}
 	err = r.Get(ctx, types.NamespacedName{Name: relay.Name, Namespace: relay.Namespace}, found)
 	if err != nil && errors.IsNotFound(err) {
 		// Define a new statefulset
-		dep, err := r.statefulsetForRelay(relay)
+		dep, err := r.statefulsetForRelay(relay, topologyConfigMap)
 		if err != nil {
 			logger.Error(err, "Failed to create new StatefulSet", "StatefulSet.Namespace", dep.Namespace, "StatefulSet.Name", dep.Name)
 			return ctrl.Result{Requeue: true}, err
@@ -137,16 +153,28 @@ func (r *RelayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
-	result, ev, err := ensureSpec(relay.Spec.Replicas, found, relay.Spec.NodeSpec, r.Client)
+	result, ev, err := ensureStatefulsetSpec(relay.Spec.Replicas, found, relay.Spec.NodeSpec, r.Client)
 	if err != nil || result.Requeue {
-		if ev != nil {
-			events = append(events, ev...)
-		}
 
 		if err != nil {
 			logger.Error(err, "Failed to update StatefulSet", "StatefulSet.Namespace", found.Namespace, "StatefulSet.Name", found.Name)
 		}
 		return result, err
+	}
+
+	events = append(events, ev...)
+
+	err = updateStatus(events, &relay.Status, relay.Namespace, relay.Name, r.Client, ctx)
+	if err != nil {
+		if err != nil {
+			logger.Error(err, "Failed to update status", "Relay.Namespace", relay.Namespace, "Relay.Name", relay.Name)
+		}
+	}
+
+	// update status
+	err = r.Client.Status().Update(ctx, relay)
+	if err != nil {
+		logger.Error(err, "Failed to update Core status")
 	}
 
 	return ctrl.Result{}, nil
@@ -163,13 +191,15 @@ func (r *RelayReconciler) serviceForRelay(relay *nodev1alpha1.Relay) (*corev1.Se
 }
 
 // statefulsetForRelay returns a Relay StatefulSet object
-func (r *RelayReconciler) statefulsetForRelay(relay *nodev1alpha1.Relay) (*appsv1.StatefulSet, error) {
+func (r *RelayReconciler) statefulsetForRelay(relay *nodev1alpha1.Relay, topologyConfigMap *corev1.ConfigMap) (*appsv1.StatefulSet, error) {
 	ls := labelsForRelay(relay.Name)
 
+	topologyConfigLocalObjectReference := corev1.LocalObjectReference{Name: topologyConfigMap.Name}
 	state := generateNodeStatefulset(relay.Name,
 		relay.Namespace,
 		ls,
 		relay.Spec.NodeSpec,
+		topologyConfigLocalObjectReference,
 		nil,
 	)
 

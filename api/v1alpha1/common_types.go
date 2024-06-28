@@ -6,6 +6,17 @@ import (
 
 // NodeSpec ...
 type NodeSpec struct {
+	// Possible values for protocol are: apexfusion
+	// +kubebuilder:validation:Enum=apexfusion
+	Protocol string `json:"protocol"`
+
+	// Possible value for network are: testnet
+	// +kubebuilder:validation:Enum=testnet
+	Network string `json:"network"`
+
+	// LocalPeers is a list of local peers to connect to
+	LocalPeers []string `json:"localPeers,omitempty"`
+
 	Replicas            int32                        `json:"replicas"`
 	ImagePullSecrets    []v1.LocalObjectReference    `json:"imagePullSecrets,omitempty"`
 	Image               string                       `json:"image,omitempty"`
@@ -14,7 +25,6 @@ type NodeSpec struct {
 	Resources           v1.ResourceRequirements      `json:"resources,omitempty"`
 	ConfigurationConfig v1.LocalObjectReference      `json:"configuration,omitempty"`
 	GenesisConfig       v1.LocalObjectReference      `json:"genesis,omitempty"`
-	TopologyConfig      v1.LocalObjectReference      `json:"topology,omitempty"`
 }
 
 // NodeServiceSpec ...

@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -86,6 +87,9 @@ var _ = Describe("Core Controller", func() {
 				},
 				Spec: nodev1alpha1.CoreSpec{
 					NodeSpec: nodev1alpha1.NodeSpec{
+						Protocol:         "apexfusion",
+						Network:          "testnet",
+						LocalPeers:       []string{"af-phx-relay.af-testnet.svc.cluster.local"},
 						Replicas:         1,
 						ImagePullSecrets: []v1.LocalObjectReference{{Name: "ocirsecret"}},
 						Image:            "alpine:latest",
@@ -166,6 +170,35 @@ var _ = Describe("Core Controller", func() {
 				return recon.Requeue
 
 			}, timeout, interval).Should(BeFalse())
+
+			// verify the topology config map data
+			topologyConfigMap := &v1.ConfigMap{}
+			configNamespacedName := types.NamespacedName{
+				Name:      "core-" + resourceName + "-topology", // topology config map name
+				Namespace: typeNamespacedName.Namespace,
+			}
+			err = k8sClient.Get(ctx, configNamespacedName, topologyConfigMap)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(topologyConfigMap).NotTo(BeNil())
+
+			// verify the topology config map data
+			// Convert topologyConfigMap.Data["topology.json"] to TopologyConfig struct
+			// and compare the values
+			generatedTopologyConfig := Topology{}
+			err = json.Unmarshal([]byte(topologyConfigMap.Data["topology.json"]), &generatedTopologyConfig)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(generatedTopologyConfig).NotTo(BeNil())
+			Expect(generatedTopologyConfig.LocalRoots).To(HaveLen(1))
+			Expect(generatedTopologyConfig.LocalRoots[0].AccessPoints).To(HaveLen(1))
+			Expect(generatedTopologyConfig.LocalRoots[0].AccessPoints[0].Address).To(Equal("af-phx-relay.af-testnet.svc.cluster.local"))
+			Expect(generatedTopologyConfig.LocalRoots[0].AccessPoints[0].Port).To(Equal(31400))
+			Expect(generatedTopologyConfig.LocalRoots[0].Advertise).To(BeFalse())
+			Expect(generatedTopologyConfig.LocalRoots[0].Valency).To(Equal(1))
+			Expect(generatedTopologyConfig.PublicRoots).To(HaveLen(1))
+			Expect(generatedTopologyConfig.PublicRoots[0].AccessPoints).To(HaveLen(0))
+			Expect(generatedTopologyConfig.PublicRoots[0].Advertise).To(BeFalse())
+			Expect(generatedTopologyConfig.PublicRoots[0].Valency).To(Equal(0))
+			Expect(generatedTopologyConfig.UseLedgerAfterSlot).To(Equal(0))
 
 			// check core is created
 			Eventually(func() *nodev1alpha1.Core {
